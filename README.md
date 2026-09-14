@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/license-GPL--3.0-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Android%2010%2B%20%2F%20HyperOS-brightgreen)](https://github.com/tangjin2580/FuckMiuiThemeManager)
 
-> 本仓库已脱离上游 fork 网络，作为**独立仓库**维护，与 `gsymasd/FuckMiuiThemeManager` 不再有任何同步关系。
+> 本仓库为**独立维护**的版本，代码与上游 `gsymasd/FuckMiuiThemeManager` 不再同步。
 
 ---
 
