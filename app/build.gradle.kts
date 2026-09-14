@@ -27,7 +27,11 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
-            setProguardFiles(listOf("proguard-rules.pro", "proguard-log.pro"))
+            // 注意：不要引入 proguard-log.pro。
+            // 那份配置会 -assumenosideeffects 掉 android.util.Log，
+            // 但原版 APK 的 release 是保留 logcat 输出的（LogHelper 靠它双写），
+            // 去掉后 adb 调试会完全看不到日志，与原版行为不符。
+            setProguardFiles(listOf("proguard-rules.pro"))
         }
     }
 

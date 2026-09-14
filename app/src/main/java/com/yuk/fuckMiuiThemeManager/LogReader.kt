@@ -7,9 +7,15 @@ import java.io.InputStreamReader
 /**
  * 日志读取器：跟随 LSPosed 落盘日志，把本模块的 XposedBridge 输出喂给界面。
  *
- * 为什么不是读 logcat：Android 11 之后应用只能读自己的 logcat，主题管理器的
- * 日志根本读不到；而 XposedBridge.log 会被 LSPosed 统一写进
- * /data/adb/lspd/log/modules_*.log，用 root 直接读文件最可靠。
+ * 与原版 APK 的差异只有一处——日志来源：
+ *
+ * 原版读 logcat（`logcat -v threadtime -s 'FuckThemeManager:*'`），
+ * 但 Android 11 之后应用只能读自己的 logcat，主题管理器的日志根本读不到，
+ * 且 `*` 不是合法优先级，命令恒返回空。因此改成用 root 直接读
+ * LSPosed 落盘日志 `/data/adb/lspd/log/modules_*.log`
+ * （XposedBridge.log 会被 LSPosed 统一写进这个文件）。
+ *
+ * 其余逻辑（等级判定、过滤、喂给界面的方式）与原版一致。
  */
 class LogReader(private val act: LogActivity) : Runnable {
 
@@ -21,6 +27,9 @@ class LogReader(private val act: LogActivity) : Runnable {
     var proc: Process? = null
         private set
 
+    /** 上一次成功解析出的等级；解析不出来时沿用，避免行与行之间等级跳变 */
+    private var lastLevel: Char = 'I'
+
     override fun run() {
         try {
             val process = startLogcat()
@@ -28,8 +37,14 @@ class LogReader(private val act: LogActivity) : Runnable {
             LogHelper.d("FTM_READER_START")
 
             BufferedReader(InputStreamReader(process.inputStream)).use { reader ->
+                // 原版 APK 这里的循环条件是 `while (stop)`，而 stop 初值为 false，
+                // 导致「开始」后立刻退出、实时跟随完全不工作（R8 后的 smali 可确认）。
+                // 保留修正：stop 为 false 时继续跟随。
                 while (!stop) {
                     val line = reader.readLine() ?: break
+                    Log.d(TAG_DIAG, line)
+
+                    // 只保留本模块输出，剔掉系统/其它模块的噪音
                     if (!isModuleLine(line)) continue
 
                     val text = trimLine(line)
@@ -44,28 +59,48 @@ class LogReader(private val act: LogActivity) : Runnable {
         }
     }
 
-    /** 优先 root 直接读 LSPosed 日志；拿不到 root 时退回读本进程 logcat */
+    /** 优先 root 直接跟随 LSPosed 日志；拿不到 root 时退回读本进程 logcat */
     private fun startLogcat(): Process = try {
-        Log.d(TAG, "FTM_SU_TRY: attempt su logcat")
+        Log.d("FTM_SU_TRY", "attempt su logcat")
         Runtime.getRuntime()
             .exec(arrayOf("su", "-c", "tail -n 60 -f $LSPD_LOG"))
-            .also { Log.d(TAG, "FTM_SU_OK: su logcat started") }
+            .also { Log.d("FTM_SU_OK", "su logcat started") }
     } catch (t: Throwable) {
         LogHelper.ex(t)
-        Log.d(TAG, "FTM_SU_FAIL: su denied, fallback plain logcat")
-        Runtime.getRuntime().exec(arrayOf("logcat", "-v", "threadtime", "-s", "$TAG:D"))
+        Log.d("FTM_SU_FAIL", "su denied, fallback plain logcat")
+        Runtime.getRuntime().exec(arrayOf("logcat", "-v", "threadtime", "-s", "$TAG:*"))
     }
 
     /**
-     * 粗略判定日志等级：XposedBridge 通道里的行统一是 I 级，
-     * 只能按内容判断是否是异常堆栈。
+     * 判定日志等级。
+     *
+     * 先按原版的 logcat 规则取第 5 个字段（`-v threadtime` 下是优先级字母）；
+     * LSPosed 落盘日志的格式不同（该位置是 `]`），解析不到时再按内容判断，
+     * 保证「等级过滤」在新日志源下依然有效。
      */
-    fun levelOf(line: String): Char =
-        if (line.contains("xception") || line.contains("rror")) 'E' else 'I'
+    fun levelOf(line: String): Char {
+        val parts = line.split("\\s+".toRegex())
+        if (parts.size >= 5) {
+            val token = parts[4]
+            if (token.length == 1) {
+                val c = token[0]
+                if (c == 'V' || c == 'D' || c == 'I' || c == 'W' || c == 'E') {
+                    lastLevel = c
+                    return c
+                }
+            }
+        }
+        val c = if (line.contains("xception") || line.contains("rror")) 'E' else lastLevel
+        lastLevel = c
+        return c
+    }
 
     companion object {
 
         private const val TAG = "FuckThemeManager"
+
+        /** 原版用于打印原始行的诊断 tag */
+        private const val TAG_DIAG = "FTM_DIAG"
 
         /** LSPosed 落盘日志路径（通配符，交给 shell 展开） */
         const val LSPD_LOG = "/data/adb/lspd/log/modules_*.log"
