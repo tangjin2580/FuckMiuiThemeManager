@@ -6,15 +6,23 @@ plugins {
 }
 
 android {
-    compileSdk = 32
-    buildToolsVersion = "32.0.0"
+    namespace = "com.yuk.fuckMiuiThemeManager"
+    compileSdk = 34
+    buildToolsVersion = "34.0.0"
+
     defaultConfig {
         applicationId = "com.yuk.fuckMiuiThemeManager"
-        minSdk = 28
-        targetSdk = 32
-        versionCode = 12
-        versionName = "1.2"
+        minSdk = 29
+        targetSdk = 34
+        versionCode = 19
+        versionName = "1.9.0"
+
+        // 只出手机端 ABI，x86 没有实际意义却会让体积翻几倍
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+        }
     }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -22,28 +30,43 @@ android {
             setProguardFiles(listOf("proguard-rules.pro", "proguard-log.pro"))
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-    packagingOptions {
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    packaging {
         resources {
             excludes += "/META-INF/**"
-            excludes += "/kotlin/**"
-            excludes += "/*.json"
         }
-        dex {
-            useLegacyPackaging = true
+        // 对应 android:extractNativeLibs=false：
+        // so 以页对齐 + STORED 方式打包，否则部分 ROM 安装会报 INSTALL_FAILED...（res=-2）
+        jniLibs {
+            useLegacyPackaging = false
         }
-        applicationVariants.all {
-            outputs.all {
-                (this as BaseVariantOutputImpl).outputFileName = "FuckMiuiThemeManager-$versionName-$name.apk"
-            }
+    }
+
+    applicationVariants.all {
+        outputs.all {
+            (this as BaseVariantOutputImpl).outputFileName =
+                "FuckMiuiThemeManager-$versionName-$name.apk"
         }
     }
 }
 
 dependencies {
+    // Xposed API 由框架提供，仅参与编译
     compileOnly("de.robv.android.xposed:api:82")
-    implementation(files("libs/miui-framework.jar"))
+    // MIUI 内部类（miui.drm.*）的桩，运行时由宿主进程提供
+    compileOnly(files("libs/miui-framework.jar"))
+
+    // 方法/字段查找
+    implementation("com.github.kyuubiran:EzXHelper:2.2.1")
+    // 按字符串特征反查被混淆的方法（自带 libdexkit.so）
+    implementation("org.luckypray:DexKit:1.1.8")
 }
