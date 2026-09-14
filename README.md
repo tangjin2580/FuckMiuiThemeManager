@@ -1,5 +1,8 @@
 # FuckMiuiThemeManager
 
+> ⚠️ **已迁移**：本项目已迁移至 **[PersonalizeHyperTheme](https://github.com/tangjin2580/PersonalizeHyperTheme)**，
+> 后续维护在新仓库进行，包名也已改为 `com.tangjin.personalizehyper.theme`。本仓库不再更新，仅作存档。
+
 适用于中国版 MIUI / HyperOS 的 Xposed 主题破解模块。
 
 [![CI](https://github.com/tangjin2580/FuckMiuiThemeManager/actions/workflows/main.yml/badge.svg)](https://github.com/tangjin2580/FuckMiuiThemeManager/actions/workflows/main.yml)
